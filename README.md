@@ -89,16 +89,16 @@ The dynamic pull request workflow provides the ability to extend the environment
     ![AzureServiceConnection](doc/assets/ado-service-connection.png)
 
 2) Configure the pipelines and create the first environment:
-   - [IaC Master](#**configure-and-run-the-iac-master-pipeline**) 
-   - [IaC Shared](#**configure-and-run-the-iac-shared-pipeline**)
-   - [IaC Topic](#**configure-and-run-the-iaC-topic-pipeline**)
-   - [IaC Topic cleanup](#**configure-the-iac-topic-cleanup-pipeline**)
-   - [CI/CD backend](#**configure-and-run-the-ci/cd-backend-pipeline**)
-   - [CI/CD frontend](#**configure-and-run-the-ci/cd-frontend-pipeline**)
+   - [IaC Master](#configure-and-run-the-iac-master-pipeline) 
+   - [IaC Shared](#configure-and-run-the-iac-shared-pipeline)
+   - [IaC Topic](#configure-and-run-the-iaC-topic-pipeline)
+   - [IaC Topic cleanup](#configure-the-iac-topic-cleanup-pipeline)
+   - [CI/CD backend](#configure-and-run-the-ci/cd-backend-pipeline)
+   - [CI/CD frontend](#configure-and-run-the-ci/cd-frontend-pipeline)
 
-3) [Test out](#Test-out-the-dynamic-Dev-workflow) the dynamic Dev workflow 
+3) [Test out](#test-out-the-dynamic-dev-workflow) the dynamic Dev workflow 
 
-## **Configure and run the IaC Master pipeline**
+## Configure and run the IaC Master pipeline
 
 The **IaC-Master pipeline** will setup the Ops infrastructure and runs just once.
 
@@ -124,7 +124,7 @@ The **IaC-Master pipeline** will setup the Ops infrastructure and runs just once
 - KeyVault is used to store all environment global secrets. The **IaC-Shared pipeline** will write the secrets there.
 - The Storage account will be used to deploy nested ARM templates. The pipeline design for **IaC-Shared** and **IaC-Topic** are supporting nested ARM templates.
 
-## **Configure and run the IaC Shared pipeline**
+## Configure and run the IaC Shared pipeline
 
 The **IaC-Shared pipeline** pipeline will deploy all shared PaaS services
 
@@ -147,7 +147,7 @@ The **IaC-Shared pipeline** pipeline will deploy all shared PaaS services
 - Our sample solution is using CosmosDB as shared service.
 - Extend this pipeline if you like to add other shared services.
 
-## **Configure and run the IaC Topic pipeline**
+## Configure and run the IaC Topic pipeline
 
 The **IaC-Topic pipeline** will deploy all PaaS services for a topic. When running the pipeline you choose the branch you would like to work on and extend the environment. For the initial deployment you choose Master as branch, which will give us the basic environment. Creating additional isolated workstreams in this environment is as easy as running the **IaC-Topic pipeline** based on the desired topic branch.
 
@@ -181,7 +181,7 @@ The **IaC-Topic pipeline** will deploy all PaaS services for a topic. When runni
 - The topic KeyVault stores all secrets for the topic instance related resources.
 - Event Grid will be used by the solution to manage events between Azure functions.
 
-## **Configure the IaC Topic cleanup pipeline**
+## Configure the IaC Topic cleanup pipeline
 
 The **IaC-Topic cleanup pipeline** will delete the topic resource group and the shared configuration in CosmosDB. You run the pipeline from your topic branch to clean topic resources in the shared environment. Extend this pipeline if you are adding more shared services to your environment.
 
@@ -193,7 +193,7 @@ The **IaC-Topic cleanup pipeline** will delete the topic resource group and the 
     | ```projName``` | [max 8 chars] needs to be unique. Will be used to compose the Azure resource names. Needs to be the same for all IaC pipelines provisioning an environment  |
     | ```azureServiceConnection``` | AzureServiceConnection name |
     
-## **Configure and run the CI/CD backend pipeline**
+## Configure and run the CI/CD backend pipeline
 
 The **CI/CD backend pipeline** will build and deploy all functions and create the Event Grid topic subscription.
 
@@ -207,7 +207,7 @@ The **CI/CD backend pipeline** will build and deploy all functions and create th
 
 - Run the **CI/CD backend pipeline** from branch Master.
   
-## **Configure and run the CI/CD frontend pipeline**
+## Configure and run the CI/CD frontend pipeline
 
 The **CI/CD frontend pipeline** will build and deploy the web frontend.
 
@@ -238,7 +238,7 @@ The **CI/CD frontend pipeline** will build and deploy the web frontend.
 
   ![DataExplorer](doc/assets/cosmos-data-explorer.png)
 
-## **Test out the dynamic Dev workflow**
+## Test out the dynamic Dev workflow
 
 To test out the dynamic Dev flow we assume you finished the *Getting started* section. Your complete base environment should look like this in Azure:
 
