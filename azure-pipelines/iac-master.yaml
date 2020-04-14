@@ -1,0 +1,61 @@
+# IaC master pipeline will deploy KeyVault and Storage into targetResourceGroup required for pipeline execution
+# Required variables to set:  projName, azureServiceConnection, azureLocation
+
+trigger: none
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+variables:     
+  # Comment out if defined at pipeline definition
+  projName: '<projName>' 
+  azureServiceConnection: '<azureServiceConnectionName>'
+  azLocation: 'westeurope' 
+  
+  # Section - Master deployment settings
+  targetResourceGroup: '$(projName)-master'
+
+  # Section - Master storage settings
+  devopsStorageContainerName: '$(projName)-devops'
+
+  # Section - ARM artifact references
+  masterIaCRepoPath: 'src/iac/master'
+  masterIaCArtifact: '$(projName)-master-iac'
+
+jobs:
+- job: DeployIaC
+  displayName: Run ARM templates
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+
+  - task: AzureCLI@2
+    displayName: 'Get Service Principal Object ID'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptLocation: inlineScript
+      scriptType: bash
+      inlineScript: |
+        spName=$(az account show --output tsv --query user.name)
+        spObjectId=$(az ad sp show --output tsv --query objectId --id $spName)
+        echo "##vso[task.setvariable variable=spObjectId;]$spObjectId"
+
+  - upload: $(masterIaCRepoPath)
+    displayName: Publish IaC artifacts from repo
+    artifact: $(masterIaCArtifact)
+
+  - download: current
+    displayName: Get IaC artifacts
+    artifact: $(masterIaCArtifact)
+    patterns: '**/*'
+
+  - task: AzureResourceGroupDeployment@2
+    displayName: 'Azure Deployment: Master IaC ARM'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      action: 'Create Or Update Resource Group'
+      deploymentMode: 'Incremental'
+      resourceGroupName: $(targetResourceGroup)
+      location: '$(azLocation)'
+      templateLocation: 'Linked artifact'
+      csmFile: '$(Pipeline.Workspace)/$(masterIaCArtifact)/master-deploy-environment.json'
+      overrideParameters: '-projName $(projName) -location $(azLocation) -storageContainerName $(devopsStorageContainerName) -vaultSkuName Standard -vaultEnableVaultForDeployment true -vaultEnableVaultForDiskEncryption false -vaultEnabledForTemplateDeployment true -spObjectId $(spObjectId)'

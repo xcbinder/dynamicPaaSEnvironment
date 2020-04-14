@@ -1,0 +1,141 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "keyVaultName": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": {
+        "description": "Name of the Key Vault resource."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "allowedValues": ["Standard", "Premium"],
+      "metadata": {
+        "description": "SKU for the vault."
+      }
+    },
+    "enableVaultForDeployment": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [true, false],
+      "metadata": {
+        "description": "Specifies if the vault is enabled for a VM deployment."
+      }
+    },
+    "enableVaultForDiskEncryption": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [true, false],
+      "metadata": {
+        "description": "Specifies if the Azure platform has access to the vault for enabling disk encryption scenarios."
+      }
+    },
+    "enabledForTemplateDeployment": {
+      "type": "bool",
+      "defaultValue": true,
+      "allowedValues": [true, false],
+      "metadata": {
+        "description": "Specifies whether Azure Resource Manager is permitted to retrieve secrets from the vault."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
+      }
+    },
+    "spObjectId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "metadata": {
+        "description": "Specifies the object ID of a user, service principal or security group in the Azure Active Directory tenant for the vault. The object ID must be unique for the list of access policies. Get it by using Get-AzADUser, Get-AzADServicePrincipal cmdlets or AzureCLI az ad sp show --output tsv --query objectId --id http://<Your SP Name>"
+      }
+    }
+  },
+
+  "resources": [{
+      "type": "Microsoft.KeyVault/vaults",
+      "name": "[parameters('keyVaultName')]",
+      "apiVersion": "2016-10-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "enabledForDeployment": "[parameters('enableVaultForDeployment')]",
+        "enabledForDiskEncryption": "[parameters('enableVaultForDiskEncryption')]",
+        "enabledForTemplateDeployment": "[parameters('enabledForTemplateDeployment')]",
+        "tenantId": "[subscription().tenantId]",
+        "accessPolicies": [],
+        "sku": {
+          "name": "[parameters('skuName')]",
+          "family": "A"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/accessPolicies",
+      "name": "[concat(parameters('keyVaultName'), '/add')]",
+      "apiVersion": "2018-02-14",
+      "properties": {
+        "accessPolicies": [{
+          "tenantId": "[parameters('tenantId')]",
+          "objectId": "[parameters('spObjectId')]",
+          "permissions": {
+            "keys": [
+              "Get",
+              "List",
+              "Update",
+              "Create",
+              "Import",
+              "Delete",
+              "Recover",
+              "Backup",
+              "Restore"
+            ],
+            "secrets": [
+              "Get",
+              "List",
+              "Set",
+              "Delete",
+              "Recover",
+              "Backup",
+              "Restore"
+            ],
+            "certificates": [
+              "Get",
+              "List",
+              "Update",
+              "Create",
+              "Import",
+              "Delete",
+              "Recover",
+              "Backup",
+              "Restore",
+              "ManageContacts",
+              "ManageIssuers",
+              "GetIssuers",
+              "ListIssuers",
+              "SetIssuers",
+              "DeleteIssuers"
+            ]
+          }
+        }]
+      },
+      "dependsOn": [
+        "[parameters('keyVaultName')]"
+      ]
+    }
+  ]
+}

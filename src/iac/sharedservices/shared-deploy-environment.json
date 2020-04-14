@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projName": {
+      "type": "string",
+      "defaultValue": "sharedenv",
+      "minLength": 1
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": { "description": "Location for all resources." }
+    },
+    "buildNumber": {
+      "type": "string",
+      "minLength": 1
+    },
+      "buildArtifactsLocation": {
+      "type": "string",
+      "minLength": 1
+    },
+    "buildArtifactsLocationSASToken": {
+      "type": "string",
+      "minLength": 1,
+      "metadata": { "description": "SAS Token provided by AZ Copy. By default, the SAS token expires after 4 hours." }
+    },
+    "keyVaultName": {
+        "type": "string"
+    },
+    "keyVaultRg": {
+      "type": "string"
+    }
+  },
+  "variables": {
+    "instanceName": "[toLower(concat('shared-',parameters('projName')))]",
+    "armUri":"[uri(parameters('buildArtifactsLocation'),concat(parameters('buildNumber'), '/$$ARMTEMFILE$$',parameters('buildArtifactsLocationSASToken')))]",
+    "cosmosdb-TemplateUrl": "[replace(variables('armUri'),'$$ARMTEMFILE$$','deploy-cosmos.json')]"
+  },
+  "resources": [
+    {
+      "apiVersion": "2017-05-10",
+      "name": "cosmosLinkedTemplate",
+      "type": "Microsoft.Resources/deployments",
+      "properties": {
+        "mode": "Incremental",
+        "templateLink": {
+          "uri":"[variables('cosmosdb-TemplateUrl')]",
+          "contentVersion":"1.0.0.0"
+        },
+        "parameters": {
+          "instanceName":{"value": "[variables('instanceName')]"},
+          "location":{"value": "[parameters('location')]"},
+          "keyVaultName": {"value": "[parameters('keyVaultName')]"},
+          "keyVaultRg": {"value": "[parameters('keyVaultRg')]"}
+        }
+      }
+    }
+  ]
+}

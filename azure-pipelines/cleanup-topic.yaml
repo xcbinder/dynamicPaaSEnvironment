@@ -1,0 +1,79 @@
+# Topic cleanup pipeline will delete the topic resource group and the shared configuration in CosmosDB
+# Required variables to set:  projName, azureServiceConnection
+  
+  trigger: none
+  name: $(Date:yyyyMMdd)$(Rev:.r)
+  
+  variables: 
+    # Comment out if defined at pipeline definition
+    projName: '<your_project_name>'
+    azureServiceConnection: '<azureServiceConnectionName>'
+
+    # Section - Topic deployment settings to suppoort PR flows as well
+    topicName: $[ format('{0}{1}', variables['Build.SourceBranchName'], variables['System.PullRequest.PullRequestId'] ) ]
+   
+    # Section - IaC references
+    topicResourceGroup: '$(projName)-topic-$(topicName)'
+    sharedResourceGroup: '$(projName)-shared'
+    
+    # Section - CosmmosDB references
+    sharedCosmosAccount: 'shared-$(projName)-cosmos'
+    databaseName: 'db-$(hashTopicName)'
+    containerName: 'container-$(hashTopicName)'
+  
+  jobs:
+  - job: Create_instanceCode
+    displayName: Create instance code and topic hash
+    pool: 
+      vmImage: 'ubuntu-latest'
+    steps:
+    - task: AzureCLI@2
+      displayName: 'create hash from branch name'
+      inputs:
+        azureSubscription: '$(azureServiceConnection)'
+        scriptLocation: inlineScript
+        scriptType: bash
+        inlineScript: |
+          hashTopicName=$(echo -n $(topicName) | md5sum | cut -c1-8)
+          echo "hashTopicName=$hashTopicName"
+          echo "##vso[task.setvariable variable=hashTopicName;isOutput=true]$hashTopicName"
+      name: setHashTopicName
+
+  - job: cleanup_shared_resources
+    displayName: Cleanup shared resources
+    dependsOn: Create_instanceCode
+    pool: 
+      vmImage: 'ubuntu-latest'
+    variables:
+      hashTopicName: $[ dependencies.Create_instanceCode.outputs['setHashTopicName.hashTopicName'] ]
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Delete Cosmosdb collection'
+      inputs:
+          azureSubscription: '$(azureServiceConnection)'
+          scriptLocation: inlineScript
+          scriptType: bash
+          inlineScript: |
+            az cosmosdb sql container delete --name $(containerName) --database-name $(databaseName) --account-name $(sharedCosmosAccount) --resource-group $(sharedResourceGroup)
+    
+  - job: cleanup_topic_resources
+    displayName: Cleanup topic resources
+    dependsOn: Create_instanceCode
+    pool: 
+      vmImage: 'ubuntu-latest'
+    variables:
+      hashTopicName: $[ dependencies.Create_instanceCode.outputs['setHashTopicName.hashTopicName'] ]
+    steps:
+    - task: AzureCLI@2
+      displayName: 'Delete resource group'
+      inputs:
+          azureSubscription: '$(azureServiceConnection)'
+          scriptLocation: inlineScript
+          scriptType: bash
+          inlineScript: |
+            echo "Checking if the resource group exists.."
+            if [ $(az group exists --name $(topicResourceGroup)) = true ]; then
+              echo "Deleting resource group..."
+              az group delete --name $(topicResourceGroup) --yes
+            fi
+            

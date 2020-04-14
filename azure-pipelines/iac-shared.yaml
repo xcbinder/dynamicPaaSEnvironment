@@ -1,0 +1,72 @@
+# IaC shared pipeline will deploy all shared services into the targetResourceGroup (shared resource group)
+# Required variables to set:  projName, azureServiceConnection, azureLocation
+# Required resources deployed by Master IaC pipeline 
+
+trigger: none
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+variables: 
+  # Comment out if defined at pipeline definition
+  projName: '<project-name>'
+  azureServiceConnection: '<azureServiceConnectionName>'
+  azLocation: 'westeurope'
+
+  # Section - Shared deployment settings
+  targetResourceGroup: '$(projName)-shared'
+
+  # Section - Master resource group and Keyvault reference
+  masterResourceGroup: '$(projName)-master'
+  masterKeyVault: 'master-$(projName)-kv'
+
+  # Section - Master storage reference
+  devopsStorageName: 'master$(projName)strg'
+  devopsStorageContainerName: '$(projName)-devops'
+  devopsBlobPrefix: '$(Build.DefinitionName)-$(Build.BuildNumber)'
+  
+  # Section - ARM artifact references
+  sharedIaCRepoPath: 'src/iac/sharedservices'
+  sharedIaCArtifact: '$(projName)-shared-iac'
+
+jobs:
+- job: DeployIaC
+  displayName: Run ARM templates
+  pool:
+    vmImage: 'windows-latest' # needed because of AzureFileCopy task
+  steps:
+
+  - upload: $(sharedIaCRepoPath)
+    displayName: Publish IaC artifacts from repo
+    artifact: $(sharedIaCArtifact)
+
+  - download: current
+    displayName: Get IaC artifacts
+    artifact: $(sharedIaCArtifact)
+    patterns: '**/*'
+
+  - task: AzureFileCopy@4
+    displayName: Copy ARM nested ARM templates to storage
+    name: AzureFileCopy
+    inputs:
+      SourcePath: '$(Pipeline.Workspace)\$(sharedIaCArtifact)\*'
+      azureSubscription: '$(azureServiceConnection)'
+      Destination: 'AzureBlob'
+      storage: '$(devopsStorageName)'
+      ContainerName: '$(devopsStorageContainerName)'
+      sasTokenTimeOutInMinutes: '20'
+      BlobPrefix: '$(devopsBlobPrefix)'
+
+  - task: AzureResourceGroupDeployment@2
+    displayName: 'Azure Deployment: Shared IaC'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      action: 'Create Or Update Resource Group'
+      deploymentMode: 'Incremental'
+      resourceGroupName: $(targetResourceGroup)
+      location: '$(azLocation)'
+      templateLocation: 'Linked artifact'
+      csmFile: '$(Pipeline.Workspace)/$(sharedIaCArtifact)/shared-deploy-environment.json'
+      overrideParameters: '-projName $(projName) -location $(azLocation) -buildNumber $(devopsBlobPrefix) -buildArtifactsLocation $(AzureFileCopy.StorageContainerUri) -buildArtifactsLocationSASToken $(AzureFileCopy.StorageContainerSasToken) -keyVaultName $(masterKeyVault) -keyVaultRg $(masterResourceGroup)' 
+      deploymentOutputs: armoutputs
+    
+

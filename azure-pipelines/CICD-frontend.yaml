@@ -1,0 +1,100 @@
+# CICD frontend pipeline will deploy the webfrontend
+# Required variables to set:  projName, azureServiceConnection
+# Required resources deployed by IaC-Master, IaC-Shared, IaC-topic and CICD backend pipelines
+
+trigger: none
+
+name: $(Date:yyyyMMdd)$(Rev:.r)
+
+variables:   
+  # Comment out if defined at pipeline definition
+  projName: '<your_project_name>'
+  azureServiceConnection: '<azureServiceConnectionName>'
+
+  # Section - Topic deployment settings to suppoort PR flows as well
+  topicName: $[ format('{0}{1}', variables['Build.SourceBranchName'], variables['System.PullRequest.PullRequestId'] ) ]
+
+  # Section - IaC references
+  topicKeyVault: '$(projName)-$(hashTopicName)-kv'
+  
+  # Section - Webapp settings
+  webAppName: '$(projName)-$(hashTopicName)-webapp'
+  
+jobs:
+- job: Create_instanceCode
+  displayName: Create instance code and topic hash
+  pool: 
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: AzureCLI@2
+    displayName: 'create hash from branch name'
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      scriptLocation: inlineScript
+      scriptType: bash
+      inlineScript: |
+        hashTopicName=$(echo -n $(topicName) | md5sum | cut -c1-8)
+        echo "hashTopicName=$hashTopicName"
+        echo "##vso[task.setvariable variable=hashTopicName;isOutput=true]$hashTopicName"
+    name: setHashTopicName
+    
+- job: Build_webapp
+  displayName: Build and deploy Webapp
+  dependsOn:
+  - Create_instanceCode
+  pool:
+    vmImage: 'ubuntu-latest'
+  variables:
+    FUNCTION_URL: 'https://$(functionUrl)/api/PublishToEGfunc'
+    hashTopicName: $[ dependencies.Create_instanceCode.outputs['setHashTopicName.hashTopicName'] ]
+  steps:
+
+  - task: AzureKeyVault@1
+    displayName: Get topic secrets from Topic KeyVault
+    inputs:
+      azureSubscription: $(azureServiceConnection)
+      keyVaultName: $(topicKeyVault)
+      secretsFilter: functionUrl
+
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '10.x'
+    displayName: 'Install Node.js'
+
+  - task: replacetokens@3
+    displayName: 'Replace environment tokens'
+    inputs:
+      rootDirectory: 'src/apps/webapp/src/environments'
+      targetFiles: 'environment*'
+      encoding: 'auto'
+      writeBOM: true
+      actionOnMissing: 'warn'
+      keepToken: false
+      tokenPrefix: '__'
+      tokenSuffix: '__'
+      escapeType: 'json'
+
+  - script: |
+      cd src/apps/webapp
+      npm install -g @angular/cli
+      npm install
+      ng build --prod
+    displayName: 'Npm install and build'
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish folder to pipeline
+    inputs:
+      PathtoPublish: '$(System.DefaultWorkingDirectory)/src/apps/webapp/dist/'
+
+  - task: ArchiveFiles@2
+    displayName: Create zip package
+    inputs:
+      rootFolderOrFile: '$(System.DefaultWorkingDirectory)/src/apps/webapp/dist/function-test/'
+      includeRootFolder: false
+
+  - task: AzureRmWebAppDeployment@3
+    displayName: Azure Webapp deployment
+    inputs:
+      azureSubscription: '$(azureServiceConnection)'
+      WebAppName: $(webAppName)
+      Package: $(System.ArtifactsDirectory)/*.zip

@@ -1,0 +1,88 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "instanceName": {
+        "type": "string",
+        "minLength": 1,
+        "metadata": { "description": "FrontEnd WebApp name." }
+      },
+      "location": {
+        "type": "string",
+        "defaultValue": "[resourceGroup().location]",
+        "metadata": { "description": "Location for all resources." }
+      },
+      "skuName": {
+        "type": "string",
+        "defaultValue": "F1",
+        "allowedValues": [ "F1", "D1", "B1", "B2", "B3", "S1", "S2", "S3", "P1", "P2", "P3", "P4" ],
+        "metadata": { "description": "Web App Sku: Plan's pricing tier and capacity. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/" }
+      },
+      "skuCapacity": {
+        "type": "int",
+        "defaultValue": 1,
+        "minValue": 1,
+        "metadata": { "description": "App plan's instance count" }
+      }
+    },
+    "variables": {
+      "appInstanceName": "[toLower(concat(parameters('instanceName'),'-webapp'))]",
+      "hostingPlanName": "[toLower(concat(parameters('instanceName'),'-webplan'))]"
+    },
+    "resources": [
+      {
+        "apiVersion": "2018-02-01",
+        "name": "[variables('hostingPlanName')]",
+        "type": "Microsoft.Web/serverfarms",
+        "location": "[parameters('location')]",
+        "sku": {
+            "name": "[parameters('skuName')]",
+            "capacity": "[parameters('skuCapacity')]"
+        },
+        "properties": {
+            "name": "[variables('hostingPlanName')]"
+        }
+      },
+      {
+        "apiVersion": "2018-02-01",
+        "name": "[variables('appInstanceName')]",
+        "type": "Microsoft.Web/sites",
+        "location": "[parameters('location')]",
+        "dependsOn": [
+          "[resourceId('Microsoft.Web/serverfarms/', variables('hostingPlanName'))]"
+        ],
+        "properties": {
+          "name": "[variables('appInstanceName')]",
+          "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]"
+        },
+        "resources": [
+          {
+            "name": "[concat(variables('appInstanceName'), '/', 'appsettings')]",
+            "type": "Microsoft.Web/sites/config",
+            "apiVersion": "2018-02-01",
+            "dependsOn": [
+              "[concat('Microsoft.Web/sites/', variables('appInstanceName'))]"
+            ],
+            "properties": {
+                 "ASPNETCORE_ENVIRONMENT": "production"
+            }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "hostingPlanResourceName": {
+        "value": "[variables('hostingPlanName')]",
+        "type": "string"
+      },
+      "hostingPlanResourceId": {
+        "value": "[resourceId('Microsoft.Web/serverfarms', variables('hostingPlanName'))]",
+        "type": "string"
+      },
+      "webappResourceId": {
+        "value": "[resourceId('Microsoft.Web/sites', variables('appInstanceName'))]",
+        "type": "string"
+      }
+    }
+  }
+  

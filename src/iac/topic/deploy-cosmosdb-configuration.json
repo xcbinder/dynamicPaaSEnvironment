@@ -1,0 +1,131 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"accountName": {
+			"type": "string",
+			"metadata": {
+				"description": "Name for the Cosmos DB account."
+			}
+		},
+		"databaseName": {
+			"type": "string",
+			"metadata": {
+				"description": "The name for the Cosmos DB."
+			}
+		},
+		"containerName": {
+			"type": "string",
+			"metadata": {
+				"description": "The name for the conatiner within Cosmos DB."
+			}
+		},
+		"partitionKey": {
+			"type": "string",
+            "defaultValue": "id",
+			"metadata": {
+				"description": "The partition key."
+			}
+		},
+		"keyVaultName": {
+			"type": "string",
+			"metadata": {
+				"description": "Topic keyvault name"
+			}
+		},
+		"topicResourceGroup": {
+			"type": "string",
+			"metadata": {
+				"description": "Topic Resource Group"
+			}
+		}
+	},
+	"variables": {
+		"accountName": "[toLower(parameters('accountName'))]"
+	},
+	"resources": 
+	[
+		{
+			"type": "Microsoft.DocumentDB/databaseAccounts/apis/databases",
+			"name": "[concat(variables('accountName'), '/sql/', parameters('databaseName'))]",
+			"apiVersion": "2016-03-31",
+			"properties":{
+				"resource":{
+					"id": "[parameters('databaseName')]"
+				},
+				"options": {
+			
+				 }
+			}
+		},
+        {
+			"type": "Microsoft.DocumentDB/databaseAccounts/apis/databases/containers",
+			"name": "[concat(variables('accountName'), '/sql/', parameters('databaseName'), '/', parameters('containerName'))]",
+            "apiVersion": "2015-04-08",
+            "dependsOn": [
+				"[resourceId('Microsoft.DocumentDB/databaseAccounts/apis/databases', variables('accountName'), 'sql', parameters('databaseName'))]"
+            ],
+			"properties":
+			{
+				"resource":{
+					"id":  "[parameters('containerName')]",
+					"partitionKey": {
+						"paths": ["[concat('/', parameters('partitionKey'))]"],
+						"kind": "Hash"
+					}
+				},
+    			"options": {}
+			}
+		},
+		{
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2017-05-10",
+            "name": "saveDbNameKv",
+            "resourceGroup": "[parameters('topicResourceGroup')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.KeyVault/vaults/secrets",
+							"name": "[concat(parameters('keyVaultName'), '/dbName')]",
+							"apiVersion": "2018-02-14",
+							"properties": {
+								"value": "[parameters('databaseName')]"
+							}
+                        }
+                    ]
+                }
+            }
+        },
+		{
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2017-05-10",
+            "name": "saveContainerNameKv",
+            "resourceGroup": "[parameters('topicResourceGroup')]",
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "type": "Microsoft.KeyVault/vaults/secrets",
+							"name": "[concat(parameters('keyVaultName'), '/containerName')]",
+							"apiVersion": "2018-02-14",
+							"properties": {
+								"value": "[parameters('containerName')]"
+							}
+                        }
+                    ]
+                }
+            }
+        }
+	]
+}

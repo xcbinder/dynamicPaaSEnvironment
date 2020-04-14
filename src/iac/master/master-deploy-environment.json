@@ -1,0 +1,245 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "projName": {
+      "type": "string",
+      "defaultValue": "sharedenv",
+      "minLength": 1
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": { "description": "Location for all resources." }
+    },
+    "storageContainerName": {
+      "type": "string",
+      "defaultValue": "sharedenv-devops",
+      "metadata": { "description": "Container for devops pratices within solution." }
+    },
+    "devopsDeleteAfterDays": {
+      "type": "int",
+      "defaultValue": 60,
+      "metadata": { "description": "Delete blobs after x days." }
+    },
+    "vaultSkuName": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "allowedValues": [ "Standard", "Premium" ],
+      "metadata": { "description": "SKU for the vault." }
+    },
+    "vaultEnableVaultForDeployment": {
+      "type": "bool",
+      "defaultValue": true,
+      "allowedValues": [ true, false ],
+      "metadata": { "description": "Specifies if the vault is enabled for a VM deployment." }
+    },
+    "vaultEnableVaultForDiskEncryption": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [ true, false ],
+      "metadata": { "description": "Specifies if the Azure platform has access to the vault for enabling disk encryption scenarios." }
+    },
+    "vaultEnabledForTemplateDeployment": {
+      "type": "bool",
+      "defaultValue": false,
+      "allowedValues": [ true, false ],
+      "metadata": { "description": "Specifies whether Azure Resource Manager is permitted to retrieve secrets from the vault." }
+    },
+    "tenantId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Specifies the Azure Active Directory tenant ID that should be used for authenticating requests to the key vault. Get it by using Get-AzSubscription cmdlet."
+      }
+    },
+    "spObjectId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "metadata": {
+        "description": "Specifies the object ID of a user, service principal or security group in the Azure Active Directory tenant for the vault. The object ID must be unique for the list of access policies. Get it by using Get-AzADUser, Get-AzADServicePrincipal cmdlets or AzureCLI az ad sp show --output tsv --query objectId --id http://<Your SP Name>"
+      }
+    }
+  },
+  "variables": {
+    "instanceName": "[toLower(concat('master-',parameters('projName')))]",
+    "keyVaultName": "[concat(variables('instanceName'),'-kv')]",
+    "storageName": "[concat(replace(variables('instanceName'), '-', ''),'strg')]",
+    "storageBlobDataContributor":"[concat('/subscriptions/', subscription().subscriptionId,'/providers/Microsoft.Authorization/roleDefinitions/', 'ba92f5b4-2d11-453d-a403-e96b0029c9fe')]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "name": "[variables('keyVaultName')]",
+      "apiVersion": "2016-10-01",
+      "location": "[parameters('location')]",
+      "properties": {
+        "enabledForDeployment": "[parameters('vaultEnableVaultForDeployment')]",
+        "enabledForDiskEncryption": "[parameters('vaultEnableVaultForDiskEncryption')]",
+        "enabledForTemplateDeployment": "[parameters('vaultEnabledForTemplateDeployment')]",
+        "tenantId": "[subscription().tenantId]",
+        "accessPolicies": [],
+        "sku": {
+          "name": "[parameters('vaultSkuName')]",
+          "family": "A"
+        }
+      },
+      "dependsOn": []
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults/accessPolicies",
+      "name": "[concat(variables('keyVaultName'), '/add')]",
+      "apiVersion": "2018-02-14",
+      "properties":{
+        "accessPolicies":[
+          {
+            "tenantId": "[parameters('tenantId')]",
+            "objectId": "[parameters('spObjectId')]",
+            "permissions": {
+              "keys": [
+                "Get",
+                "List",
+                "Update",
+                "Create",
+                "Import",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ],
+              "secrets": [
+                "Get",
+                "List",
+                "Set",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore"
+              ],
+              "certificates": [
+                "Get",
+                "List",
+                "Update",
+                "Create",
+                "Import",
+                "Delete",
+                "Recover",
+                "Backup",
+                "Restore",
+                "ManageContacts",
+                "ManageIssuers",
+                "GetIssuers",
+                "ListIssuers",
+                "SetIssuers",
+                "DeleteIssuers"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[variables('keyVaultName')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "sku": {
+        "name": "Standard_LRS",
+        "tier": "Standard"
+      },
+      "kind": "StorageV2",
+      "name": "[variables('storageName')]",
+      "apiVersion": "2018-07-01",
+      "location": "[parameters('location')]",
+      "tags": {},
+      "scale": null,
+      "properties": {
+        "networkAcls": {
+          "bypass": "AzureServices",
+          "virtualNetworkRules": [],
+          "ipRules": [],
+          "defaultAction": "Allow"
+        },
+        "supportsHttpsTrafficOnly": false,
+        "encryption": {
+          "services": {
+            "file": {
+              "enabled": true
+            },
+            "blob": {
+              "enabled": true
+            }
+          },
+          "keySource": "Microsoft.Storage"
+        },
+        "accessTier": "Hot"
+      },
+      "resources": [
+        {
+          "name": "[concat('default/', parameters('storageContainerName'))]",
+          "type": "blobServices/containers",
+          "apiVersion": "2018-07-01",
+          "dependsOn": [
+            "[variables('storageName')]"
+          ]
+        },
+        {
+            "type": "Microsoft.Storage/storageAccounts/providers/roleAssignments",
+            "apiVersion": "2018-09-01-preview",
+            "name": "[concat(variables('storageName'), '/Microsoft.Authorization/', guid(uniqueString(variables('storageName'))))]",
+            "dependsOn": [
+                "[variables('storageName')]"
+            ],
+            "properties": {
+                "roleDefinitionId": "[variables('storageBlobDataContributor')]",
+                "principalId": "[parameters('spObjectId')]"
+            }
+        },
+        {
+          "name": "[concat(variables('storageName'), '/default')]",
+          "type": "Microsoft.Storage/storageAccounts/managementPolicies",
+          "apiVersion": "2019-04-01",
+          "dependsOn": [
+            "[variables('storageName')]"
+          ],
+          "properties": {
+            "policy": {
+              "rules": [
+                {
+                  "name": "devops-arm-templates-lifecycle-rule",
+                  "enabled": true,
+                  "type": "Lifecycle",
+                  "definition": {
+                      "filters": {
+                      "blobTypes": [ "blockBlob" ],
+                      "prefixMatch": [ "[concat(parameters('storageContainerName'))]" ]
+                    },
+                  "actions": {
+                    "baseBlob": {
+                      "delete": { "daysAfterModificationGreaterThan": "[parameters('devopsDeleteAfterDays')]" }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ],
+      "dependsOn": []
+    }
+  ],
+  "outputs": {
+    "keyvaultinstanceId": {
+      "value": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+      "type": "string"
+    },
+    "storageAccountId": {
+      "value": "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]",
+      "type": "string"
+    }
+  }
+}
