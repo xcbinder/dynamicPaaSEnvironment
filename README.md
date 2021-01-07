@@ -2,7 +2,7 @@
 
   [Fast forward -  jump directly to the *Getting started* section](#getting-started)
 
-The purpose of this project is to provide a basic set of ADO pipelines to setup a dynamic environment using PaaS services. The pipelines will demonstrate a pattern to extend the environment for parallel isolated workstreams and shrink it after the work is finished.
+The purpose of this project is to provide a basic set of Azure pipelines to setup environments running a solution composed of Azure PaaS services. The pipelines will demonstrate a pattern to extend a dynamic environment for parallel isolated workstreams and shrink it after the work is finished.
 
 The solution consists of interconnected PaaS services. The requirement is to have mulitple isolated environments in parallel. All environments need to be deployed via IaC in this case using ARM but this could be Terraform as well.
 
